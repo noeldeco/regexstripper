@@ -1,0 +1,2 @@
+"""Regex Stripper package."""
+
