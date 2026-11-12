@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
     QStatusBar,
+    QMessageBox,
 )
 from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QFont, QKeySequence, QShortcut, QIcon, QTextCursor
@@ -61,6 +62,7 @@ from src.config import (
     ICON_SAVE,
     ICON_ARROW_UP,
     ICON_ARROW_DOWN,
+    ICON_DEDUP,
 )
 from src.core.regex_engine import RegexEngine
 from src.core.history_manager import HistoryManager
@@ -68,7 +70,10 @@ from src.core.settings_manager import SettingsManager
 from src.core.preset_manager import PresetManager
 from src.ui.editor import DragDropEditor
 from src.ui.highlighter import MatchHighlighter
-from src.ui.confirmation_dialog import DeleteConfirmationDialog
+from src.ui.confirmation_dialog import (
+    DeleteConfirmationDialog,
+    DeleteDuplicatesConfirmationDialog,
+)
 from src.ui.regex_reference_dialog import RegexReferenceDialog
 from src.ui.presets_dialog import PresetsDialog
 from src.ui.styles import get_stylesheet
@@ -237,13 +242,14 @@ class MainWindow(QMainWindow):
         self.ignore_case_cb.toggled.connect(self._on_options_changed)
         options_row.addWidget(self.ignore_case_cb)
 
-        self.multiline_cb = QCheckBox("Multiline (m)")
-        self.multiline_cb.setChecked(True)
-        self.multiline_cb.setToolTip(
-            "^ and $ match start/end of each line (re.MULTILINE). Active by default; uncheck to disable."
+        self.disable_multiline_cb = QCheckBox("Disable multiline")
+        self.disable_multiline_cb.setChecked(False)
+        self.disable_multiline_cb.setToolTip(
+            "When checked, treats text as a single line (^ and $ only match start/end of the entire text)."
         )
-        self.multiline_cb.toggled.connect(self._on_options_changed)
-        options_row.addWidget(self.multiline_cb)
+        self.disable_multiline_cb.toggled.connect(self._on_options_changed)
+        options_row.addWidget(self.disable_multiline_cb)
+        self.multiline_cb = self.disable_multiline_cb
 
         self.dot_all_cb = QCheckBox("Dot Matches All (s)")
         self.dot_all_cb.setToolTip("Dot matches newlines (re.DOTALL)")
@@ -412,6 +418,17 @@ class MainWindow(QMainWindow):
 
         bottom_layout.addStretch()
 
+        # Delete Duplicates Button
+        self.delete_duplicates_btn = QPushButton(" Delete Duplicates")
+        self.delete_duplicates_btn.setObjectName("deleteDupBtn")
+        self.delete_duplicates_btn.setIcon(QIcon(str(ICON_DEDUP)))
+        self.delete_duplicates_btn.setIconSize(QSize(16, 16))
+        self.delete_duplicates_btn.setMinimumHeight(36)
+        self.delete_duplicates_btn.setToolTip("Delete duplicate lines from the text (requires multiline mode)")
+        self.delete_duplicates_btn.setEnabled(False)
+        self.delete_duplicates_btn.clicked.connect(self._on_delete_duplicates_clicked)
+        bottom_layout.addWidget(self.delete_duplicates_btn)
+
         # Primary Action: Delete Button
         self.delete_btn = QPushButton(" Delete Matches...")
         self.delete_btn.setObjectName("deleteBtn")
@@ -511,7 +528,7 @@ class MainWindow(QMainWindow):
         flags = 0
         if self.ignore_case_cb.isChecked():
             flags |= re.IGNORECASE
-        if self.multiline_cb.isChecked():
+        if not self.disable_multiline_cb.isChecked():
             flags |= re.MULTILINE
         if self.dot_all_cb.isChecked():
             flags |= re.DOTALL
@@ -542,14 +559,14 @@ class MainWindow(QMainWindow):
             self.pattern_label.setText("Literal Text:")
             self.pattern_combo.lineEdit().setPlaceholderText("Enter literal search text (no regex)...")
             self.dot_all_cb.setEnabled(False)
-            self.multiline_cb.setEnabled(False)
+            self.disable_multiline_cb.setEnabled(False)
         else:
             self.pattern_label.setText("Regex Pattern:")
             self.pattern_combo.lineEdit().setPlaceholderText(
                 r"Enter regex pattern (e.g. \b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b)..."
             )
             self.dot_all_cb.setEnabled(True)
-            self.multiline_cb.setEnabled(True)
+            self.disable_multiline_cb.setEnabled(True)
 
         self.debounce_timer.start()
 
@@ -576,6 +593,7 @@ class MainWindow(QMainWindow):
 
     def _on_options_changed(self) -> None:
         """Triggered when flags are toggled."""
+        self._update_delete_duplicates_btn_state()
         self.debounce_timer.start()
 
     def _on_mode_toggled(self, checked: bool) -> None:
@@ -599,6 +617,7 @@ class MainWindow(QMainWindow):
         if not self._raw_text.strip():
             self.copy_btn.setEnabled(False)
             self.save_btn.setEnabled(False)
+        self._update_delete_duplicates_btn_state()
         self._update_cursor_stats()
         self.debounce_timer.start()
 
@@ -687,6 +706,7 @@ class MainWindow(QMainWindow):
 
         self.current_match_index = -1
         self._update_navigation_controls()
+        self._update_delete_duplicates_btn_state()
         self._update_status(match_count, is_valid, err_msg)
 
     def _update_navigation_controls(self) -> None:
@@ -849,6 +869,56 @@ class MainWindow(QMainWindow):
             self.status_label.setStyleSheet(f"color: {COLOR_STATUS_MATCH}; font-weight: bold;")
             self._apply_highlights()
 
+    def _update_delete_duplicates_btn_state(self) -> None:
+        """Enables the Delete Duplicates button only when Disable multiline is NOT checked and text is present."""
+        text = self._raw_text if self._is_previewing else self.editor.toPlainText()
+        is_clickable = (not self.disable_multiline_cb.isChecked()) and bool(text)
+        self.delete_duplicates_btn.setEnabled(is_clickable)
+
+    def _on_delete_duplicates_clicked(self) -> None:
+        """Removes all duplicate lines from the text after confirmation."""
+        if self.disable_multiline_cb.isChecked():
+            return
+
+        text = self._raw_text if self._is_previewing else self.editor.toPlainText()
+        if not text:
+            return
+
+        deduped_text, dup_count = RegexEngine.delete_duplicate_lines(
+            text, ignore_case=self.ignore_case_cb.isChecked()
+        )
+
+        total_lines = len(text.splitlines())
+        if dup_count == 0:
+            QMessageBox.information(
+                self,
+                "No Duplicates",
+                "No duplicate lines were found in the text."
+            )
+            return
+
+        confirmed = DeleteDuplicatesConfirmationDialog.confirm(
+            self, duplicate_count=dup_count, total_lines=total_lines
+        )
+        if not confirmed:
+            return
+
+        if self._is_previewing:
+            self._is_previewing = False
+            self.editor.setReadOnly(False)
+
+        self._push_undo_state()
+        self._raw_text = deduped_text
+        self.editor.setPlainText(deduped_text)
+
+        self.copy_btn.setEnabled(True)
+        self.save_btn.setEnabled(True)
+
+        self._apply_highlights()
+        status_msg = f"✓ Deleted {dup_count} duplicate line(s)."
+        self.status_label.setText(status_msg)
+        self.status_label.setStyleSheet(f"color: {COLOR_STATUS_MATCH}; font-weight: bold;")
+
     def _on_delete_clicked(self) -> None:
         """Executes deletion with modal confirmation and registers pattern to history."""
         pattern = self.pattern_combo.currentText()
@@ -983,6 +1053,7 @@ class MainWindow(QMainWindow):
             self.editor.clear()
             self.copy_btn.setEnabled(False)
             self.save_btn.setEnabled(False)
+            self._update_delete_duplicates_btn_state()
             self._apply_highlights()
 
     def _on_reference_clicked(self) -> None:

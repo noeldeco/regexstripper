@@ -20,7 +20,7 @@ from typing import List, Dict
 PRESET_EXPRESSIONS: List[Dict[str, str]] = [
     {
         "name": "Strip Phrase tags",
-        "expression": r"\{.+?>|<.+?\}",
+        "expression": r"\{.+?>|<.+?\}|\{.}",
         "description": "Matches phrase tags like {...> or <...}",
     },
     {

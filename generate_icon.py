@@ -42,8 +42,9 @@ def generate_icon():
     painter.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, ".*")
     painter.end()
 
-    ico_path = "f:/DEV/regexstripper/assets/app.ico"
-    png_path = "f:/DEV/regexstripper/assets/app.png"
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    ico_path = os.path.join(base_dir, "assets", "app.ico")
+    png_path = os.path.join(base_dir, "assets", "app.png")
     img.save(png_path, "PNG")
     img.save(ico_path, "ICO")
     print(f"Generated {ico_path} and {png_path} successfully!")

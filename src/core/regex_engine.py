@@ -51,22 +51,30 @@ class RegexEngine:
 
         # Special anchor handling when ^ or $ is used by itself in regex mode
         if not is_literal and pattern.strip() == "^":
-            spans = []
-            offset = 0
-            for line in text.splitlines(keepends=True):
-                spans.append((offset, min(len(text), offset + 1)))
-                offset += len(line)
-            return spans
+            if flags & re.MULTILINE:
+                spans = []
+                offset = 0
+                for line in text.splitlines(keepends=True):
+                    spans.append((offset, min(len(text), offset + 1)))
+                    offset += len(line)
+                return spans
+            else:
+                return [(0, min(len(text), 1))] if text else []
 
         if not is_literal and pattern.strip() == "$":
-            spans = []
-            offset = 0
-            for line in text.splitlines(keepends=True):
-                content_len = len(line.rstrip("\r\n"))
-                end_pos = offset + content_len
-                spans.append((max(0, end_pos - 1), end_pos if content_len > 0 else end_pos + 1))
-                offset += len(line)
-            return spans
+            if flags & re.MULTILINE:
+                spans = []
+                offset = 0
+                for line in text.splitlines(keepends=True):
+                    content_len = len(line.rstrip("\r\n"))
+                    end_pos = offset + content_len
+                    spans.append((max(0, end_pos - 1), end_pos if content_len > 0 else end_pos + 1))
+                    offset += len(line)
+                return spans
+            else:
+                content_len = len(text.rstrip("\r\n"))
+                end_pos = content_len
+                return [(max(0, end_pos - 1), end_pos if content_len > 0 else end_pos + 1)] if text else []
 
         is_valid, _, compiled = cls.validate_pattern(pattern, flags, is_literal=is_literal)
         if not is_valid or compiled is None:
@@ -158,7 +166,10 @@ class RegexEngine:
 
         # Anchor handling when ^ or $ is used by itself
         if not is_literal and pattern.strip() in ("^", "$"):
-            return len(text.splitlines(keepends=True))
+            if flags & re.MULTILINE:
+                return len(text.splitlines(keepends=True))
+            else:
+                return 1 if text else 0
 
         is_valid, _, compiled = cls.validate_pattern(pattern, flags, is_literal=is_literal)
         if not is_valid or compiled is None:
@@ -186,7 +197,10 @@ class RegexEngine:
 
         # Anchor deletion for ^ or $ leaves text unchanged
         if not is_literal and pattern.strip() in ("^", "$"):
-            return text, len(text.splitlines(keepends=True))
+            if flags & re.MULTILINE:
+                return text, len(text.splitlines(keepends=True))
+            else:
+                return text, 1 if text else 0
 
         is_valid, _, compiled = cls.validate_pattern(pattern, flags, is_literal=is_literal)
         if not is_valid or compiled is None:
@@ -287,26 +301,41 @@ class RegexEngine:
 
         # Anchor handling when ^ or $ is used by itself
         if not is_literal and pattern.strip() == "^":
-            lines = text.splitlines(keepends=True)
-            if not lines:
-                return text, 0
-            return "".join(replacement + line for line in lines), len(lines)
+            if flags & re.MULTILINE:
+                lines = text.splitlines(keepends=True)
+                if not lines:
+                    return text, 0
+                return "".join(replacement + line for line in lines), len(lines)
+            else:
+                if not text:
+                    return text, 0
+                return replacement + text, 1
 
         if not is_literal and pattern.strip() == "$":
-            lines = text.splitlines(keepends=True)
-            if not lines:
-                return text, 0
-            result_parts = []
-            for line in lines:
-                if line.endswith("\r\n"):
-                    result_parts.append(line[:-2] + replacement + "\r\n")
-                elif line.endswith("\n"):
-                    result_parts.append(line[:-1] + replacement + "\n")
-                elif line.endswith("\r"):
-                    result_parts.append(line[:-1] + replacement + "\r")
+            if flags & re.MULTILINE:
+                lines = text.splitlines(keepends=True)
+                if not lines:
+                    return text, 0
+                result_parts = []
+                for line in lines:
+                    if line.endswith("\r\n"):
+                        result_parts.append(line[:-2] + replacement + "\r\n")
+                    elif line.endswith("\n"):
+                        result_parts.append(line[:-1] + replacement + "\n")
+                    elif line.endswith("\r"):
+                        result_parts.append(line[:-1] + replacement + "\r")
+                    else:
+                        result_parts.append(line + replacement)
+                return "".join(result_parts), len(lines)
+            else:
+                if not text:
+                    return text, 0
+                if text.endswith("\r\n"):
+                    return text[:-2] + replacement + "\r\n", 1
+                elif text.endswith("\n") or text.endswith("\r"):
+                    return text[:-1] + replacement + text[-1], 1
                 else:
-                    result_parts.append(line + replacement)
-            return "".join(result_parts), len(lines)
+                    return text + replacement, 1
 
         is_valid, _, compiled = cls.validate_pattern(pattern, flags, is_literal=is_literal)
         if not is_valid or compiled is None:
@@ -343,51 +372,74 @@ class RegexEngine:
 
         # Anchor handling for ^
         if not is_literal and pattern.strip() == "^":
-            lines = text.splitlines(keepends=True)
-            if not lines:
-                return text, [], []
-            parts: List[str] = []
-            green_spans: List[Tuple[int, int]] = []
-            offset = 0
-            repl_len = len(replacement)
-            for line in lines:
-                green_spans.append((offset, offset + repl_len))
-                parts.append(replacement)
-                offset += repl_len
-                parts.append(line)
-                offset += len(line)
-            return "".join(parts), green_spans, []
+            if flags & re.MULTILINE:
+                lines = text.splitlines(keepends=True)
+                if not lines:
+                    return text, [], []
+                parts: List[str] = []
+                green_spans: List[Tuple[int, int]] = []
+                offset = 0
+                repl_len = len(replacement)
+                for line in lines:
+                    green_spans.append((offset, offset + repl_len))
+                    parts.append(replacement)
+                    offset += repl_len
+                    parts.append(line)
+                    offset += len(line)
+                return "".join(parts), green_spans, []
+            else:
+                if not text:
+                    return text, [], []
+                repl_len = len(replacement)
+                return replacement + text, [(0, repl_len)], []
 
         # Anchor handling for $
         if not is_literal and pattern.strip() == "$":
-            lines = text.splitlines(keepends=True)
-            if not lines:
-                return text, [], []
-            parts: List[str] = []
-            green_spans: List[Tuple[int, int]] = []
-            offset = 0
-            repl_len = len(replacement)
-            for line in lines:
-                if line.endswith("\r\n"):
-                    body = line[:-2]
+            if flags & re.MULTILINE:
+                lines = text.splitlines(keepends=True)
+                if not lines:
+                    return text, [], []
+                parts: List[str] = []
+                green_spans: List[Tuple[int, int]] = []
+                offset = 0
+                repl_len = len(replacement)
+                for line in lines:
+                    if line.endswith("\r\n"):
+                        body = line[:-2]
+                        ending = "\r\n"
+                    elif line.endswith("\n"):
+                        body = line[:-1]
+                        ending = "\n"
+                    elif line.endswith("\r"):
+                        body = line[:-1]
+                        ending = "\r"
+                    else:
+                        body = line
+                        ending = ""
+                    parts.append(body)
+                    offset += len(body)
+                    green_spans.append((offset, offset + repl_len))
+                    parts.append(replacement)
+                    offset += repl_len
+                    parts.append(ending)
+                    offset += len(ending)
+                return "".join(parts), green_spans, []
+            else:
+                if not text:
+                    return text, [], []
+                repl_len = len(replacement)
+                if text.endswith("\r\n"):
+                    body = text[:-2]
                     ending = "\r\n"
-                elif line.endswith("\n"):
-                    body = line[:-1]
-                    ending = "\n"
-                elif line.endswith("\r"):
-                    body = line[:-1]
-                    ending = "\r"
+                elif text.endswith("\n") or text.endswith("\r"):
+                    body = text[:-1]
+                    ending = text[-1]
                 else:
-                    body = line
+                    body = text
                     ending = ""
-                parts.append(body)
-                offset += len(body)
-                green_spans.append((offset, offset + repl_len))
-                parts.append(replacement)
-                offset += repl_len
-                parts.append(ending)
-                offset += len(ending)
-            return "".join(parts), green_spans, []
+                preview = body + replacement + ending
+                green_spans = [(len(body), len(body) + repl_len)]
+                return preview, green_spans, []
 
         is_valid, _, compiled = cls.validate_pattern(pattern, flags, is_literal=is_literal)
         if not is_valid or compiled is None:
@@ -442,3 +494,62 @@ class RegexEngine:
             return "".join(parts), green_spans, red_spans
         except Exception:
             return text, [], []
+
+    @classmethod
+    def delete_duplicate_lines(
+        cls,
+        text: str,
+        ignore_case: bool = False
+    ) -> Tuple[str, int]:
+        """
+        Removes all duplicate lines from the text, retaining only the first
+        occurrence of each unique line in its original order.
+
+        Args:
+            text: Input text containing lines.
+            ignore_case: If True, lines differing only in casing are treated as duplicates.
+
+        Returns:
+            (deduped_text, count_of_duplicate_lines_removed)
+        """
+        if not text:
+            return "", 0
+
+        lines = text.splitlines(keepends=False)
+        if not lines:
+            return "", 0
+
+        seen = set()
+        kept_lines: List[str] = []
+        dup_count = 0
+
+        for line in lines:
+            key = line.lower() if ignore_case else line
+            if key not in seen:
+                seen.add(key)
+                kept_lines.append(line)
+            else:
+                dup_count += 1
+
+        if dup_count == 0:
+            return text, 0
+
+        # Preserve line ending style
+        if "\r\n" in text:
+            eol = "\r\n"
+        elif "\r" in text and "\n" not in text:
+            eol = "\r"
+        else:
+            eol = "\n"
+
+        result = eol.join(kept_lines)
+
+        # Preserve trailing newline if originally present
+        if text.endswith("\r\n"):
+            result += "\r\n"
+        elif text.endswith("\n"):
+            result += "\n"
+        elif text.endswith("\r"):
+            result += "\r"
+
+        return result, dup_count

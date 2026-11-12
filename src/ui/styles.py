@@ -131,7 +131,7 @@ QPlainTextEdit#editor:focus {
 /* Buttons */
 QPushButton {
     border-radius: 6px;
-    padding: 7px 16px;
+    padding: 7px 10px;
     font-size: 13px;
     font-weight: 500;
 }
@@ -141,7 +141,7 @@ QPushButton#themeBtn {
     background-color: #F1F5F9;
     border: 1px solid #CBD5E1;
     border-radius: 6px;
-    padding: 5px 8px;
+    padding: 5px 5px;
     min-width: 32px;
     min-height: 32px;
 }
@@ -187,6 +187,25 @@ QPushButton#deleteBtn:disabled {
     color: #FEF2F2;
 }
 
+/* Delete Duplicates Button */
+QPushButton#deleteDupBtn {
+    background-color: #D97706;
+    color: #FFFFFF;
+    border: 1px solid #B45309;
+    font-weight: bold;
+}
+QPushButton#deleteDupBtn:hover {
+    background-color: #B45309;
+}
+QPushButton#deleteDupBtn:pressed {
+    background-color: #92400E;
+}
+QPushButton#deleteDupBtn:disabled {
+    background-color: #E2E8F0;
+    border: 1px solid #CBD5E1;
+    color: #94A3B8;
+}
+
 /* Copy Button */
 QPushButton#copyBtn {
     background-color: #2563EB;
@@ -230,7 +249,7 @@ QPushButton#navBtn {
     background-color: #F1F5F9;
     color: #334155;
     border: 1px solid #CBD5E1;
-    padding: 3px 8px;
+    padding: 3px 5px;
     font-size: 11px;
 }
 QPushButton#navBtn:hover {
@@ -389,7 +408,7 @@ QPlainTextEdit#editor:focus {
 /* Buttons */
 QPushButton {
     border-radius: 6px;
-    padding: 7px 16px;
+    padding: 7px 10px;
     font-size: 13px;
     font-weight: 500;
 }
@@ -399,7 +418,7 @@ QPushButton#themeBtn {
     background-color: #313244;
     border: 1px solid #45475A;
     border-radius: 6px;
-    padding: 5px 8px;
+    padding: 5px 5px;
     min-width: 32px;
     min-height: 32px;
 }
@@ -445,6 +464,25 @@ QPushButton#deleteBtn:disabled {
     color: #7F1D1D;
 }
 
+/* Delete Duplicates Button (Dark Theme) */
+QPushButton#deleteDupBtn {
+    background-color: #B45309;
+    color: #FFFFFF;
+    border: 1px solid #92400E;
+    font-weight: bold;
+}
+QPushButton#deleteDupBtn:hover {
+    background-color: #D97706;
+}
+QPushButton#deleteDupBtn:pressed {
+    background-color: #78350F;
+}
+QPushButton#deleteDupBtn:disabled {
+    background-color: #1E1E2E;
+    border: 1px solid #313244;
+    color: #585B70;
+}
+
 /* Copy Button */
 QPushButton#copyBtn {
     background-color: #3B82F6;
@@ -488,7 +526,7 @@ QPushButton#navBtn {
     background-color: #F1F5F9;
     color: #334155;
     border: 1px solid #CBD5E1;
-    padding: 3px 8px;
+    padding: 3px 5px;
     font-size: 11px;
 }
 QPushButton#navBtn:hover {

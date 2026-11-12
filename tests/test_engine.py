@@ -174,33 +174,45 @@ class TestRegexEngine(unittest.TestCase):
 
     def test_replace_matches_caret_anchor(self):
         text = "Alpha\nBeta\nGamma\n"
-        res, count = RegexEngine.replace_matches(text, "^", "♪")
+        # Multiline mode
+        res, count = RegexEngine.replace_matches(text, "^", "♪", flags=re.MULTILINE)
         self.assertEqual(count, 3)
         self.assertEqual(res, "♪Alpha\n♪Beta\n♪Gamma\n")
 
         # Without trailing newline
         text_no_trailing = "Alpha\nBeta\nGamma"
-        res2, count2 = RegexEngine.replace_matches(text_no_trailing, "^", "♪")
+        res2, count2 = RegexEngine.replace_matches(text_no_trailing, "^", "♪", flags=re.MULTILINE)
         self.assertEqual(count2, 3)
         self.assertEqual(res2, "♪Alpha\n♪Beta\n♪Gamma")
 
+        # Single line mode (flags=0, multiline disabled)
+        res_single, count_single = RegexEngine.replace_matches(text, "^", "♪", flags=0)
+        self.assertEqual(count_single, 1)
+        self.assertEqual(res_single, "♪Alpha\nBeta\nGamma\n")
+
     def test_replace_matches_dollar_anchor(self):
         text = "Alpha\nBeta\nGamma\n"
-        res, count = RegexEngine.replace_matches(text, "$", "♪")
+        # Multiline mode
+        res, count = RegexEngine.replace_matches(text, "$", "♪", flags=re.MULTILINE)
         self.assertEqual(count, 3)
         self.assertEqual(res, "Alpha♪\nBeta♪\nGamma♪\n")
 
         # Windows CRLF
         text_crlf = "Alpha\r\nBeta\r\nGamma\r\n"
-        res_crlf, count_crlf = RegexEngine.replace_matches(text_crlf, "$", "♪")
+        res_crlf, count_crlf = RegexEngine.replace_matches(text_crlf, "$", "♪", flags=re.MULTILINE)
         self.assertEqual(count_crlf, 3)
         self.assertEqual(res_crlf, "Alpha♪\r\nBeta♪\r\nGamma♪\r\n")
 
         # Without trailing newline
         text_no_trailing = "Alpha\nBeta\nGamma"
-        res2, count2 = RegexEngine.replace_matches(text_no_trailing, "$", "♪")
+        res2, count2 = RegexEngine.replace_matches(text_no_trailing, "$", "♪", flags=re.MULTILINE)
         self.assertEqual(count2, 3)
         self.assertEqual(res2, "Alpha♪\nBeta♪\nGamma♪")
+
+        # Single line mode (flags=0, multiline disabled)
+        res_single, count_single = RegexEngine.replace_matches(text, "$", "♪", flags=0)
+        self.assertEqual(count_single, 1)
+        self.assertEqual(res_single, "Alpha\nBeta\nGamma♪\n")
 
     def test_literal_mode_caret_and_dollar(self):
         # In literal mode, ^ and $ should match literal symbols, not act as line anchors
@@ -233,19 +245,33 @@ class TestRegexEngine(unittest.TestCase):
 
     def test_generate_diff_preview_caret_anchor(self):
         text = "line1\nline2\n"
-        preview, green_spans, red_spans = RegexEngine.generate_diff_preview(text, "^", "♪")
+        preview, green_spans, red_spans = RegexEngine.generate_diff_preview(
+            text, "^", "♪", flags=re.MULTILINE
+        )
         self.assertEqual(preview, "♪line1\n♪line2\n")
         self.assertEqual(len(green_spans), 2)
         self.assertEqual(len(red_spans), 0)
         self.assertEqual([preview[s:e] for s, e in green_spans], ["♪", "♪"])
 
+        # Single line mode
+        preview_s, green_s, _ = RegexEngine.generate_diff_preview(text, "^", "♪", flags=0)
+        self.assertEqual(preview_s, "♪line1\nline2\n")
+        self.assertEqual(len(green_s), 1)
+
     def test_generate_diff_preview_dollar_anchor(self):
         text = "line1\nline2\n"
-        preview, green_spans, red_spans = RegexEngine.generate_diff_preview(text, "$", "♪")
+        preview, green_spans, red_spans = RegexEngine.generate_diff_preview(
+            text, "$", "♪", flags=re.MULTILINE
+        )
         self.assertEqual(preview, "line1♪\nline2♪\n")
         self.assertEqual(len(green_spans), 2)
         self.assertEqual(len(red_spans), 0)
         self.assertEqual([preview[s:e] for s, e in green_spans], ["♪", "♪"])
+
+        # Single line mode
+        preview_s, green_s, _ = RegexEngine.generate_diff_preview(text, "$", "♪", flags=0)
+        self.assertEqual(preview_s, "line1\nline2♪\n")
+        self.assertEqual(len(green_s), 1)
 
     def test_generate_diff_preview_empty_or_no_matches(self):
         text = "hello world"
@@ -253,6 +279,39 @@ class TestRegexEngine(unittest.TestCase):
         self.assertEqual(preview, text)
         self.assertEqual(green, [])
         self.assertEqual(red, [])
+
+    def test_delete_duplicate_lines(self):
+        # Normal duplicates with newline preserved
+        text = "apple\nbanana\napple\ncherry\nbanana\n"
+        deduped, count = RegexEngine.delete_duplicate_lines(text)
+        self.assertEqual(count, 2)
+        self.assertEqual(deduped, "apple\nbanana\ncherry\n")
+
+        # Without trailing newline
+        text_no_nl = "apple\nbanana\napple\ncherry"
+        deduped2, count2 = RegexEngine.delete_duplicate_lines(text_no_nl)
+        self.assertEqual(count2, 1)
+        self.assertEqual(deduped2, "apple\nbanana\ncherry")
+
+        # Windows CRLF
+        text_crlf = "A\r\nB\r\nA\r\n"
+        deduped_crlf, count_crlf = RegexEngine.delete_duplicate_lines(text_crlf)
+        self.assertEqual(count_crlf, 1)
+        self.assertEqual(deduped_crlf, "A\r\nB\r\n")
+
+        # Case insensitive
+        text_case = "Alpha\nalpha\nBeta\n"
+        deduped_cs, count_cs = RegexEngine.delete_duplicate_lines(text_case, ignore_case=False)
+        self.assertEqual(count_cs, 0)
+        self.assertEqual(deduped_cs, text_case)
+
+        deduped_ci, count_ci = RegexEngine.delete_duplicate_lines(text_case, ignore_case=True)
+        self.assertEqual(count_ci, 1)
+        self.assertEqual(deduped_ci, "Alpha\nBeta\n")
+
+        # Empty and no duplicates
+        self.assertEqual(RegexEngine.delete_duplicate_lines(""), ("", 0))
+        self.assertEqual(RegexEngine.delete_duplicate_lines("one\ntwo"), ("one\ntwo", 0))
 
 
 if __name__ == "__main__":

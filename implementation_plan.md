@@ -367,6 +367,27 @@ regexstripper/
 
 ---
 
+## Phase 11: Disable Multiline Toggle & Delete Duplicates Feature (COMPLETED)
+- [x] **Renamed Multiline Checkbox**:
+  - Renamed from "Multiline (m)" to "Disable multiline".
+  - Default: Unchecked (`setChecked(False)`), ensuring multiline is active by default.
+  - When checked: treats text as a single line, omitting `re.MULTILINE` from flags so line anchors (`^` and `$`) match only the start and end of the entire text buffer.
+- [x] **Engine Anchor Flag Support**:
+  - Updated `RegexEngine.find_match_spans`, `count_matches`, `strip_matches`, `replace_matches`, and `generate_diff_preview` to respect `flags & re.MULTILINE` when evaluating anchors `^` and `$`.
+- [x] **New "Delete Duplicates" Button**:
+  - Positioned directly to the left of the "Delete Matches" button in the bottom action bar.
+  - Dynamically enabled only when "Disable multiline" is unchecked and text is present; immediately disabled when "Disable multiline" is checked.
+  - Bundled custom vector SVG icon (`assets/icons/dedup.svg`) with styled amber theme palettes in both Light and Dark modes.
+- [x] **Duplicate Lines Deletion Engine & Modal Confirmation**:
+  - Implemented `RegexEngine.delete_duplicate_lines` to remove subsequent occurrences of duplicate lines while preserving first-seen order, line ending formats (CRLF/LF), and trailing newlines.
+  - Implemented `DeleteDuplicatesConfirmationDialog` safety modal displaying duplicate count and total lines, with safe Cancel default.
+  - Full workflow integration: multi-level undo stack push (`Ctrl+Shift+Z`), Copy Result button activation, status feedback, and real-time highlight refresh.
+- [x] **Button Padding Optimization**:
+  - Reduced horizontal (left/right) padding across all buttons by 40% (base buttons reduced from 16px to 10px; theme/nav buttons reduced from 8px to 5px) for a tighter, more compact layout.
+- [x] **Automated Test Coverage**: 61/61 unit and UI tests passing.
+
+---
+
 ## 7. Edge Cases & Safeguards
 
 1. **Inverted Spans Calculation**:

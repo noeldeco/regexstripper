@@ -18,7 +18,10 @@ from PySide6.QtCore import Qt
 from src.config import DeletionMode, AppTheme
 from src.core.history_manager import HistoryManager
 from src.ui.main_window import MainWindow
-from src.ui.confirmation_dialog import DeleteConfirmationDialog
+from src.ui.confirmation_dialog import (
+    DeleteConfirmationDialog,
+    DeleteDuplicatesConfirmationDialog,
+)
 
 # Ensure single QApplication instance across tests
 app = QApplication.instance()
@@ -347,6 +350,85 @@ class TestUI(unittest.TestCase):
             self.window.editor.toPlainText(),
             "Line One♪\nLine Two♪\nLine Three♪\n"
         )
+
+    def test_disable_multiline_checkbox_ui(self):
+        # 1. By default, "Disable multiline" is NOT checked -> multiline is ON
+        self.assertFalse(self.window.disable_multiline_cb.isChecked())
+        self.window.editor.setPlainText("Line One\nLine Two\nLine Three\n")
+        self.window.pattern_combo.setEditText("^")
+        self.window._apply_highlights()
+        # In multiline mode, ^ matches all 3 lines
+        self.assertEqual(len(self.window.current_match_spans), 3)
+
+        # 2. Check "Disable multiline" -> single line mode
+        self.window.disable_multiline_cb.setChecked(True)
+        self.window._apply_highlights()
+        # In single-line mode, ^ matches only at position 0 (1 match)
+        self.assertEqual(len(self.window.current_match_spans), 1)
+
+        # 3. In single-line mode, replacement prepends only at the beginning of the text
+        self.window.replace_input.setText("♪")
+        self.window._apply_highlights()
+        self.window._on_replace_clicked()
+        self.assertEqual(
+            self.window.editor.toPlainText(),
+            "♪Line One\nLine Two\nLine Three\n"
+        )
+
+    def test_delete_duplicates_button_enabled_state(self):
+        # When editor is empty, button is disabled
+        self.window.editor.clear()
+        self.window._apply_highlights()
+        self.assertFalse(self.window.delete_duplicates_btn.isEnabled())
+
+        # When editor has text and Disable multiline is unchecked -> enabled
+        self.window.editor.setPlainText("Alpha\nBeta\nAlpha\n")
+        self.window._apply_highlights()
+        self.assertFalse(self.window.disable_multiline_cb.isChecked())
+        self.assertTrue(self.window.delete_duplicates_btn.isEnabled())
+
+        # When Disable multiline is checked -> button must become disabled
+        self.window.disable_multiline_cb.setChecked(True)
+        self.assertFalse(self.window.delete_duplicates_btn.isEnabled())
+
+        # Unchecking Disable multiline re-enables it
+        self.window.disable_multiline_cb.setChecked(False)
+        self.assertTrue(self.window.delete_duplicates_btn.isEnabled())
+
+    @patch.object(DeleteDuplicatesConfirmationDialog, "confirm", return_value=False)
+    def test_delete_duplicates_action_cancel(self, mock_confirm):
+        original = "apple\nbanana\napple\ncherry\n"
+        self.window.editor.setPlainText(original)
+        self.window._apply_highlights()
+        self.window.copy_btn.setEnabled(False)
+
+        # Click Delete Duplicates but cancel dialog
+        self.window._on_delete_duplicates_clicked()
+        mock_confirm.assert_called_once()
+        # Text and states must remain untouched
+        self.assertEqual(self.window.editor.toPlainText(), original)
+        self.assertFalse(self.window.copy_btn.isEnabled())
+
+    @patch.object(DeleteDuplicatesConfirmationDialog, "confirm", return_value=True)
+    def test_delete_duplicates_action_confirm_and_undo(self, mock_confirm):
+        original = "apple\nbanana\napple\ncherry\nbanana\n"
+        self.window.editor.setPlainText(original)
+        self.window._apply_highlights()
+        self.window.copy_btn.setEnabled(False)
+
+        # Click Delete Duplicates and accept dialog
+        self.window._on_delete_duplicates_clicked()
+        mock_confirm.assert_called_once()
+
+        # Duplicates deleted, first occurrence and order preserved
+        expected = "apple\nbanana\ncherry\n"
+        self.assertEqual(self.window.editor.toPlainText(), expected)
+        self.assertTrue(self.window.copy_btn.isEnabled())
+        self.assertIn("Deleted 2 duplicate line(s)", self.window.status_label.text())
+
+        # Test Undo restores original text
+        self.window._on_undo_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), original)
 
 
 if __name__ == "__main__":

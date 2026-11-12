@@ -133,3 +133,93 @@ class DeleteConfirmationDialog(QDialog):
         dialog = cls(parent, mode, match_count, pattern)
         return dialog.exec() == QDialog.Accepted
 
+
+class DeleteDuplicatesConfirmationDialog(QDialog):
+    """Modal dialog prompting the user to confirm duplicate lines deletion."""
+
+    def __init__(
+        self,
+        parent: Optional[QWidget],
+        duplicate_count: int,
+        total_lines: int
+    ):
+        super().__init__(parent)
+        self.duplicate_count = duplicate_count
+        self.total_lines = total_lines
+
+        self.setWindowTitle("Confirm Delete Duplicates")
+        self.setModal(True)
+        self.setMinimumWidth(440)
+        self.init_ui()
+
+    def init_ui(self) -> None:
+        layout = QVBoxLayout(self)
+        layout.setSpacing(16)
+        layout.setContentsMargins(24, 20, 24, 20)
+
+        # Header with icon and title
+        header_layout = QHBoxLayout()
+        icon_label = QLabel("⚠️")
+        icon_label.setStyleSheet("font-size: 28px;")
+        header_layout.addWidget(icon_label)
+
+        title_label = QLabel("Delete All Duplicate Lines?")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        layout.addLayout(header_layout)
+
+        # Separator line
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
+
+        # Description / details
+        unique_count = self.total_lines - self.duplicate_count
+        desc_text = (
+            f"You are about to delete <b>{self.duplicate_count}</b> duplicate line(s) from the text.<br><br>"
+            f"The first occurrence of each unique line will be kept in its original order "
+            f"(<b>{unique_count}</b> unique line(s) remaining out of {self.total_lines} total lines).<br><br>"
+            f"<b>Warning:</b> All duplicate line occurrences will be removed. (Undo is available)."
+        )
+
+        desc_label = QLabel(desc_text)
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet("font-size: 13px; line-height: 1.4;")
+        layout.addWidget(desc_label)
+
+        layout.addSpacing(8)
+
+        # Buttons layout
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setObjectName("utilBtn")
+        self.cancel_btn.setMinimumHeight(32)
+        self.cancel_btn.setMinimumWidth(90)
+        self.cancel_btn.clicked.connect(self.reject)
+        self.cancel_btn.setDefault(True)  # Safe default
+        btn_layout.addWidget(self.cancel_btn)
+
+        self.confirm_btn = QPushButton("Delete Duplicates")
+        self.confirm_btn.setObjectName("deleteBtn")
+        self.confirm_btn.setMinimumHeight(32)
+        self.confirm_btn.setMinimumWidth(140)
+        self.confirm_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(self.confirm_btn)
+
+        layout.addLayout(btn_layout)
+
+    @classmethod
+    def confirm(
+        cls,
+        parent: Optional[QWidget],
+        duplicate_count: int,
+        total_lines: int
+    ) -> bool:
+        """Convenience method to show the dialog and return True if accepted."""
+        dialog = cls(parent, duplicate_count, total_lines)
+        return dialog.exec() == QDialog.Accepted
+

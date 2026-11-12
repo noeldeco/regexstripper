@@ -22,7 +22,7 @@ class TestPresets(unittest.TestCase):
         # Must have "Strip Phrase tags" with expression r"\{.+?>|<.+?\}"
         first_entry = PRESET_EXPRESSIONS[0]
         self.assertEqual(first_entry["name"], "Strip Phrase tags")
-        self.assertEqual(first_entry["expression"], r"\{.+?>|<.+?\}")
+        self.assertEqual(first_entry["expression"], r"\{.+?>|<.+?\}|\{.}")
 
     def test_presets_dialog_filtering(self):
         dialog = PresetsDialog()

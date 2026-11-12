@@ -37,6 +37,7 @@ ICON_SAVE = ICONS_DIR / "save_white.svg"
 ICON_ARROW_UP = ICONS_DIR / "arrow_up.svg"
 ICON_ARROW_DOWN = ICONS_DIR / "arrow_down.svg"
 ICON_DIFF = ICONS_DIR / "diff.svg"
+ICON_DEDUP = ICONS_DIR / "dedup.svg"
 
 # Window Dimensions
 DEFAULT_WINDOW_WIDTH = 1040
