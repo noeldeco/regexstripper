@@ -58,6 +58,49 @@ class TestPresets(unittest.TestCase):
             reloaded = PresetManager(file_path=f)
             self.assertEqual(len(reloaded.get_all_presets()), len(PRESET_EXPRESSIONS) + 1)
 
+    def test_rich_preset_edit_delete_import_export(self):
+        import tempfile
+        from pathlib import Path
+        from src.core.preset_manager import PresetManager
+
+        with tempfile.TemporaryDirectory() as td:
+            f = Path(td) / "presets.json"
+            export_f = Path(td) / "exported.json"
+            mgr = PresetManager(file_path=f)
+
+            mgr.add_user_preset(
+                name="Collapse Spaces",
+                expression=r"[ \t]{2,}",
+                replacement=" ",
+                description="Normalize spaces",
+                ignore_case=True,
+                mode="delete_matches",
+            )
+            exported_count = mgr.export_presets(export_f)
+            self.assertEqual(exported_count, 1)
+
+            # Edit / rename
+            mgr.update_user_preset(
+                old_name="Collapse Spaces",
+                new_name="Single Space",
+                expression=r" {2,}",
+                replacement=" ",
+                description="Updated",
+            )
+            user_list = mgr.get_user_presets()
+            self.assertEqual(len(user_list), 1)
+            self.assertEqual(user_list[0]["name"], "Single Space")
+            self.assertEqual(user_list[0]["replacement"], " ")
+
+            # Delete
+            self.assertTrue(mgr.remove_user_preset("Single Space"))
+            self.assertEqual(len(mgr.get_user_presets()), 0)
+
+            # Import back
+            imported = mgr.import_presets(export_f)
+            self.assertEqual(imported, 1)
+            self.assertEqual(mgr.get_user_presets()[0]["name"], "Collapse Spaces")
+
 
 if __name__ == "__main__":
     unittest.main()

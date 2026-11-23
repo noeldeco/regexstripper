@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Application Metadata
 APP_NAME = "Regex Stripper"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 APP_TITLE = f"{APP_NAME} v{APP_VERSION}"
 
 # Project Paths & Asset Directories
@@ -38,22 +38,28 @@ ICON_ARROW_UP = ICONS_DIR / "arrow_up.svg"
 ICON_ARROW_DOWN = ICONS_DIR / "arrow_down.svg"
 ICON_DIFF = ICONS_DIR / "diff.svg"
 ICON_DEDUP = ICONS_DIR / "dedup.svg"
+ICON_REDO = ICONS_DIR / "redo.svg"
+ICON_OPEN = ICONS_DIR / "open.svg"
+ICON_PIPELINE = ICONS_DIR / "pipeline.svg"
+ICON_LINES = ICONS_DIR / "lines.svg"
 
 # Window Dimensions
-DEFAULT_WINDOW_WIDTH = 1040
-DEFAULT_WINDOW_HEIGHT = 760
-MIN_WINDOW_WIDTH = 750
-MIN_WINDOW_HEIGHT = 520
+DEFAULT_WINDOW_WIDTH = 1100
+DEFAULT_WINDOW_HEIGHT = 780
+MIN_WINDOW_WIDTH = 820
+MIN_WINDOW_HEIGHT = 540
 
 # History & Settings Configuration
 MAX_HISTORY_ITEMS = 30
-MAX_UNDO_STEPS = 10
+MAX_UNDO_STEPS = 20
 HISTORY_FILE_NAME = ".regexstripper_history.json"
 HISTORY_FILE_PATH = Path.home() / HISTORY_FILE_NAME
 SETTINGS_FILE_NAME = ".regexstripper_settings.json"
 SETTINGS_FILE_PATH = Path.home() / SETTINGS_FILE_NAME
 PRESETS_FILE_NAME = ".regexstripper_user_presets.json"
 PRESETS_FILE_PATH = Path.home() / PRESETS_FILE_NAME
+PIPELINES_FILE_NAME = ".regexstripper_pipelines.json"
+PIPELINES_FILE_PATH = Path.home() / PIPELINES_FILE_NAME
 
 # Debounce Timing (milliseconds)
 HIGHLIGHT_DEBOUNCE_MS = 120
@@ -62,6 +68,8 @@ HIGHLIGHT_DEBOUNCE_MS = 120
 class DeletionMode(str, Enum):
     DELETE_MATCHES = "delete_matches"
     DELETE_NON_MATCHES = "delete_non_matches"
+    DELETE_MATCHING_LINES = "delete_matching_lines"
+    KEEP_MATCHING_LINES = "keep_matching_lines"
 
 # Themes
 class AppTheme(str, Enum):

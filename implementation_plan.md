@@ -388,6 +388,31 @@ regexstripper/
 
 ---
 
+## Phase 12: Engine Optimizations, Bugfixes & Power-User Features (COMPLETED)
+- [x] **Performance Optimizations**:
+  - Single-pass `RegexEngine.analyze()` eliminates 4–5x redundant regex compilations and `finditer()` scans per edit.
+  - Viewport-culled `MatchHighlighter` with `bisect` slicing keeps large multi-MB documents smooth on scroll.
+  - O(1) cursor stats caching avoids re-splitting the full document on every cursor move.
+  - Background thread analysis guard (`> 100k chars`) with generation cancellation prevents UI freezes on slow patterns.
+- [x] **Bugfixes**:
+  - Removed hardcoded QSS `font-size` on `#editor` so `Ctrl+Wheel` and `Ctrl++`/`Ctrl+-`/`Ctrl+0` font zoom work properly.
+  - Fixed Dark Theme copy-paste QSS bugs (`navBtn` and `saveBtn:disabled`).
+  - Preserved inline Replace Diff Preview highlights across theme toggles.
+  - Preserved action status confirmation messages after Delete, Replace, Undo, Redo, and Line operations.
+  - Fixed match navigation (`F3`) during Replace Preview to step through originals without double-counting.
+  - Prevented pushing no-op snapshots to `undo_stack` on 0-match replacements.
+  - Fixed CRLF offset drift and double `setPlainText()` on drag-and-drop file loading (normalizing to LF internally and restoring original EOL on `Save As...`).
+- [x] **New Features**:
+  - **Line-Level Match Modes**: `Delete Matching Lines` (`grep -v`) and `Keep Matching Lines` (`grep`) with live line highlighting and confirmation modals.
+  - **Multi-Step Cleaning Pipelines (`PipelineManager` + `PipelineDialog`)**: Build, reorder, save, and run chained regex + line-cleanup recipes in one click.
+  - **Quick Line-Cleanup Utilities (`Lines ▾` menu)**: 1-click *Remove Blank Lines*, *Trim Whitespace*, and *Sort Lines* (A→Z, Z→A, Natural Numeric, By Length).
+  - **Richer Presets**: Save optional replacement, flags, and action mode per preset, with single-form Add/Edit, Delete, and JSON Import/Export in `PresetsDialog`.
+  - **Live Extraction Preview & Impact Deltas**: Split-pane live extraction preview in `Delete Non-Matches` mode plus live `[-N chars / -M lines]` impact deltas.
+  - **Step-Through Replacement & Redo Stack**: `Replace Next` button for selective replacements, `Interpret \n/\t` escape toggle, `Redo` (`Ctrl+Shift+Y`), `Open File...` (`Ctrl+O`), and persisted session preferences (window geometry, zoom, wrap, flags).
+- [x] **Automated Test Coverage**: 77/77 automated unit and UI tests passing across engine, history, pipelines, presets, settings, and UI suites.
+
+---
+
 ## 7. Edge Cases & Safeguards
 
 1. **Inverted Spans Calculation**:

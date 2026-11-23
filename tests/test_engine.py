@@ -313,6 +313,92 @@ class TestRegexEngine(unittest.TestCase):
         self.assertEqual(RegexEngine.delete_duplicate_lines(""), ("", 0))
         self.assertEqual(RegexEngine.delete_duplicate_lines("one\ntwo"), ("one\ntwo", 0))
 
+    def test_analyze_single_pass_all_modes(self):
+        from src.config import DeletionMode
+        text = "apple 1\nbanana\napricot 2\nberry"
+
+        # DELETE_MATCHES
+        res_m = RegexEngine.analyze(text, r"\d+", flags=re.MULTILINE, mode=DeletionMode.DELETE_MATCHES)
+        self.assertTrue(res_m.is_valid)
+        self.assertEqual(res_m.match_count, 2)
+        self.assertEqual(res_m.target_spans, res_m.match_spans)
+
+        # DELETE_NON_MATCHES
+        res_nm = RegexEngine.analyze(text, r"\d+", flags=re.MULTILINE, mode=DeletionMode.DELETE_NON_MATCHES)
+        self.assertEqual(res_nm.match_count, 2)
+        self.assertEqual(res_nm.target_spans, RegexEngine.find_inverted_spans(text, r"\d+", flags=re.MULTILINE))
+
+        # DELETE_MATCHING_LINES
+        res_dml = RegexEngine.analyze(text, r"\d+", flags=re.MULTILINE, mode=DeletionMode.DELETE_MATCHING_LINES)
+        self.assertEqual(res_dml.matching_line_count, 2)
+        self.assertEqual(len(res_dml.target_spans), 2)
+
+        # KEEP_MATCHING_LINES
+        res_kml = RegexEngine.analyze(text, r"\d+", flags=re.MULTILINE, mode=DeletionMode.KEEP_MATCHING_LINES)
+        self.assertEqual(res_kml.matching_line_count, 2)
+        self.assertEqual(len(res_kml.target_spans), 2)  # 2 non-matching lines targeted
+
+    def test_strip_and_keep_matching_lines(self):
+        text = "INFO ok\nERROR failed\nWARN slow\nERROR crash\n"
+        stripped, removed = RegexEngine.strip_matching_lines(text, r"ERROR", flags=re.MULTILINE)
+        self.assertEqual(removed, 2)
+        self.assertEqual(stripped, "INFO ok\nWARN slow\n")
+
+        kept, kept_count = RegexEngine.keep_matching_lines(text, r"ERROR", flags=re.MULTILINE)
+        self.assertEqual(kept_count, 2)
+        self.assertEqual(kept, "ERROR failed\nERROR crash\n")
+
+    def test_line_cleanup_utilities(self):
+        # Remove blank lines
+        text = "alpha\n\n   \nbeta\n\t\ngamma\n"
+        cleaned, removed = RegexEngine.remove_blank_lines(text)
+        self.assertEqual(removed, 3)
+        self.assertEqual(cleaned, "alpha\nbeta\ngamma\n")
+
+        # Trim lines
+        messy = "  alpha \t\nbeta\n\t gamma  "
+        trimmed, mod = RegexEngine.trim_lines(messy)
+        self.assertEqual(mod, 2)
+        self.assertEqual(trimmed, "alpha\nbeta\ngamma")
+
+        # Sort lines
+        unsorted = "item10\nitem2\nitem1\n"
+        s_asc, _ = RegexEngine.sort_lines(unsorted, mode="asc")
+        self.assertEqual(s_asc, "item1\nitem10\nitem2\n")
+
+        s_desc, _ = RegexEngine.sort_lines(unsorted, mode="desc")
+        self.assertEqual(s_desc, "item2\nitem10\nitem1\n")
+
+        s_nat, _ = RegexEngine.sort_lines(unsorted, mode="natural")
+        self.assertEqual(s_nat, "item1\nitem2\nitem10\n")
+
+        s_len, _ = RegexEngine.sort_lines("bbb\na\ncc", mode="length")
+        self.assertEqual(s_len, "a\ncc\nbbb")
+
+    def test_interpret_escapes_and_literal_replace(self):
+        self.assertEqual(RegexEngine.interpret_escapes(r"a\nb\tc\\d"), "a\nb\tc\\d")
+        res, count = RegexEngine.replace_matches(
+            "a,b,c", ",", r"\n", is_literal=True, interpret_escapes=True
+        )
+        self.assertEqual(count, 2)
+        self.assertEqual(res, "a\nb\nc")
+
+        # Without interpret_escapes in literal mode, \n stays literal
+        res_lit, _ = RegexEngine.replace_matches(
+            "a,b", ",", r"\n", is_literal=True, interpret_escapes=False
+        )
+        self.assertEqual(res_lit, r"a\nb")
+
+    def test_replace_single_match(self):
+        text = "foo 10 bar 20 baz 30"
+        spans = RegexEngine.find_match_spans(text, r"\d+")
+        new_text, end_pos, ok = RegexEngine.replace_single_match(
+            text, spans[1], r"(\d+)", r"[\1]"
+        )
+        self.assertTrue(ok)
+        self.assertEqual(new_text, "foo 10 bar [20] baz 30")
+        self.assertEqual(end_pos, 15)
+
 
 if __name__ == "__main__":
     unittest.main()

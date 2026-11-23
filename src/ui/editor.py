@@ -1,11 +1,11 @@
 """
 Enhanced Editor for Regex Stripper
-Provides Drag & Drop file loading, Ctrl+Wheel font zooming, and cursor tracking.
+Provides Drag & Drop file loading, Ctrl+Wheel font zooming, CRLF normalization,
+and read-only preview event hooks.
 """
 
 from __future__ import annotations
-from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 from PySide6.QtWidgets import QPlainTextEdit
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QWheelEvent, QFont
@@ -16,7 +16,7 @@ from src.config import MONOSPACE_FONTS
 class DragDropEditor(QPlainTextEdit):
     """Custom QPlainTextEdit with file drag-and-drop, font zooming, and read-only event hooks."""
 
-    fileDropped = Signal(str, str)  # (file_path, content)
+    fileDropped = Signal(str, str)  # (file_path, normalized_content)
     zoomChanged = Signal(int)       # point_size
     readOnlyAttempted = Signal()    # Emitted when user tries typing while editor is read-only (preview)
 
@@ -24,12 +24,43 @@ class DragDropEditor(QPlainTextEdit):
         super().__init__(parent)
         self.setAcceptDrops(True)
         self.base_font_size = 11
+        self._font_size = self.base_font_size
         self._raw_text: Optional[str] = None
+        self.preferred_eol: str = "\n"
 
         editor_font = QFont()
         editor_font.setFamilies(MONOSPACE_FONTS)
-        editor_font.setPointSize(self.base_font_size)
+        editor_font.setPointSize(self._font_size)
         self.setFont(editor_font)
+        self.setStyleSheet(f"font-size: {self._font_size}pt;")
+
+    @staticmethod
+    def read_file_normalized(file_path: str) -> Tuple[str, str]:
+        """
+        Reads a file with UTF-8 / Latin-1 fallback and normalizes CRLF/CR to LF
+        so QPlainTextEdit offsets match RegexEngine offsets 1:1.
+
+        Returns:
+            (normalized_content, original_eol)
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8", newline="") as f:
+                raw = f.read()
+        except UnicodeDecodeError:
+            with open(file_path, "r", encoding="latin-1", newline="") as f:
+                raw = f.read()
+
+        if "\r\n" in raw:
+            eol = "\r\n"
+            normalized = raw.replace("\r\n", "\n")
+        elif "\r" in raw:
+            eol = "\r"
+            normalized = raw.replace("\r", "\n")
+        else:
+            eol = "\n"
+            normalized = raw
+
+        return normalized, eol
 
     def setPlainText(self, text: str) -> None:
         """Sets clean document text, resetting any active preview mode."""
@@ -99,15 +130,9 @@ class DragDropEditor(QPlainTextEdit):
                 file_path = urls[0].toLocalFile()
                 if file_path:
                     try:
-                        # Attempt UTF-8, then fallback to latin-1
-                        try:
-                            with open(file_path, "r", encoding="utf-8") as f:
-                                content = f.read()
-                        except UnicodeDecodeError:
-                            with open(file_path, "r", encoding="latin-1") as f:
-                                content = f.read()
-
-                        self.setPlainText(content)
+                        content, eol = self.read_file_normalized(file_path)
+                        self.preferred_eol = eol
+                        # Emit once and let MainWindow push undo & call setPlainText once
                         self.fileDropped.emit(file_path, content)
                         event.acceptProposedAction()
                         return
@@ -127,25 +152,29 @@ class DragDropEditor(QPlainTextEdit):
         else:
             super().wheelEvent(event)
 
-    def zoom_in(self) -> None:
+    @property
+    def current_font_size(self) -> int:
+        return self._font_size
+
+    def set_font_size(self, point_size: int, emit_signal: bool = True) -> None:
+        clamped = max(7, min(32, int(point_size)))
+        self._font_size = clamped
         f = self.font()
-        new_size = min(f.pointSize() + 1, 32)
-        f.setPointSize(new_size)
+        f.setPointSize(clamped)
         self.setFont(f)
-        self.zoomChanged.emit(new_size)
+        # Explicit pt stylesheet overrides ancestor QWidget { font-size: 13px; }
+        self.setStyleSheet(f"font-size: {clamped}pt;")
+        if emit_signal:
+            self.zoomChanged.emit(clamped)
+
+    def zoom_in(self) -> None:
+        self.set_font_size(self._font_size + 1)
 
     def zoom_out(self) -> None:
-        f = self.font()
-        new_size = max(f.pointSize() - 1, 7)
-        f.setPointSize(new_size)
-        self.setFont(f)
-        self.zoomChanged.emit(new_size)
+        self.set_font_size(self._font_size - 1)
 
     def reset_zoom(self) -> None:
-        f = self.font()
-        f.setPointSize(self.base_font_size)
-        self.setFont(f)
-        self.zoomChanged.emit(self.base_font_size)
+        self.set_font_size(self.base_font_size)
 
     def keyPressEvent(self, event) -> None:
         """Notifies when editing keys are pressed while in read-only preview mode."""
@@ -164,4 +193,3 @@ class DragDropEditor(QPlainTextEdit):
             if event.key() not in nav_keys and not is_copy_or_select:
                 self.readOnlyAttempted.emit()
         super().keyPressEvent(event)
-

@@ -430,6 +430,144 @@ class TestUI(unittest.TestCase):
         self.window._on_undo_clicked()
         self.assertEqual(self.window.editor.toPlainText(), original)
 
+    @patch.object(DeleteConfirmationDialog, "confirm", return_value=True)
+    def test_line_level_modes_and_redo(self, mock_confirm):
+        original = "INFO a\nERROR b\nINFO c\nERROR d\n"
+        self.window.editor.setPlainText(original)
+        self.window.pattern_combo.setEditText("ERROR")
+
+        # Delete Matching Lines
+        self.window.mode_delete_matching_lines.setChecked(True)
+        self.assertEqual(self.window.active_mode, DeletionMode.DELETE_MATCHING_LINES)
+        self.window._on_delete_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), "INFO a\nINFO c\n")
+        self.assertIn("Deleted 2 matching line(s)", self.window.status_label.text())
+
+        # Undo then Redo
+        self.window._on_undo_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), original)
+        self.assertTrue(self.window.redo_btn.isEnabled())
+        self.assertIn("Undid last operation", self.window.status_label.text())
+
+        self.window._on_redo_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), "INFO a\nINFO c\n")
+        self.assertIn("Redid operation", self.window.status_label.text())
+
+        # Keep Matching Lines
+        self.window.editor.setPlainText(original)
+        self.window.mode_keep_matching_lines.setChecked(True)
+        self.window._on_delete_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), "ERROR b\nERROR d\n")
+
+    def test_line_utilities_ui(self):
+        self.window.editor.setPlainText("  b  \n\n  a  \n")
+        self.window._on_line_utility("trim")
+        self.assertEqual(self.window.editor.toPlainText(), "b\n\na\n")
+
+        self.window._on_line_utility("remove_blank")
+        self.assertEqual(self.window.editor.toPlainText(), "b\na\n")
+
+        self.window._on_line_utility("sort_asc")
+        self.assertEqual(self.window.editor.toPlainText(), "a\nb\n")
+
+    def test_step_through_replace_next_ui(self):
+        self.window.editor.setPlainText("cat 1, cat 2, cat 3")
+        self.window.pattern_combo.setEditText("cat")
+        self.window.replace_input.setText("dog")
+        self.window._apply_highlights()
+
+        # Navigate matches in replace preview should not double count (3, not 6)
+        self.assertEqual(len(self.window.current_match_spans), 3)
+
+        # Replace only the first match
+        self.window._on_replace_next_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), "dog 1, cat 2, cat 3")
+
+        # Replace next match
+        self.window._on_replace_next_clicked()
+        self.assertEqual(self.window.editor.toPlainText(), "dog 1, dog 2, cat 3")
+
+    def test_live_extraction_preview_pane(self):
+        self.window.editor.setPlainText("id=10 id=20 id=10")
+        self.window.pattern_combo.setEditText(r"id=(\d+)")
+        self.window.mode_delete_non_matches.setChecked(True)
+        self.window.unique_cb.setChecked(True)
+        self.window.capture_group_input.setText("1")
+        self.window.live_extract_preview_cb.setChecked(True)
+
+        self.assertFalse(self.window.preview_container.isHidden())
+        self.assertEqual(self.window.extraction_preview_editor.toPlainText(), "10\n20")
+
+    def test_bugfixes_noop_replace_theme_preview_zoom_and_dark_qss(self):
+        from src.ui.styles import DARK_STYLESHEET, LIGHT_STYLESHEET
+        from src.ui.editor import DragDropEditor
+
+        # 1. No-op replace must not push to undo stack
+        self.window.editor.setPlainText("hello world")
+        self.window.pattern_combo.setEditText(r"\d+")
+        self.window.replace_input.setText("X")
+        self.window._apply_highlights()
+        self.assertEqual(len(self.window.undo_stack), 0)
+        self.window._on_replace_clicked()
+        self.assertEqual(len(self.window.undo_stack), 0)
+
+        # 2. Theme toggle during active replace preview preserves diff highlights
+        self.window.editor.setPlainText("foo 123")
+        self.window.pattern_combo.setEditText(r"\d+")
+        self.window.replace_input.setText("999")
+        self.window._apply_highlights()
+        self.assertTrue(self.window._is_previewing)
+        self.window._toggle_theme()
+        self.assertTrue(self.window.highlighter._is_diff_mode)
+        self.assertEqual(len(self.window.editor.extraSelections()), 2)
+
+        # 3. Font zoom works and QSS does not hardcode font-size on #editor
+        initial_pt = self.window.editor.current_font_size
+        self.window.editor.zoom_in()
+        self.assertEqual(self.window.editor.current_font_size, initial_pt + 1)
+        self.assertEqual(self.window.editor.font().pointSize(), initial_pt + 1)
+        self.assertEqual(self.window.settings_manager.font_size, initial_pt + 1)
+        self.assertIn(f"font-size: {initial_pt + 1}pt;", self.window.editor.styleSheet())
+
+        # 4. Dark theme navBtn and saveBtn:disabled use dark colors, not light copy-paste
+        self.assertNotIn("background-color: #D1FAE5;", DARK_STYLESHEET)
+        self.assertNotIn("background-color: #F1F5F9;", DARK_STYLESHEET)
+
+        # 5. CRLF file normalization
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "crlf.txt"
+            p.write_bytes(b"line1\r\nline2\r\n")
+            norm, eol = DragDropEditor.read_file_normalized(str(p))
+            self.assertEqual(norm, "line1\nline2\n")
+            self.assertEqual(eol, "\r\n")
+
+    def test_responsive_icon_only_buttons_on_narrow_width(self):
+        # Wide window: full text visible on all buttons
+        self.window.resize(1100, 780)
+        self.window._apply_responsive_button_labels(1100)
+        self.assertEqual(self.window.undo_btn.text(), " Undo")
+        self.assertEqual(self.window.delete_btn.text(), " Delete Matches...")
+
+        # Medium-narrow window: utility buttons collapse to icon-only, primary buttons keep text
+        self.window._apply_responsive_button_labels(950)
+        self.assertEqual(self.window.undo_btn.text(), "")
+        self.assertTrue(bool(self.window.undo_btn.toolTip()))
+        self.assertEqual(self.window.delete_btn.text(), " Delete Matches...")
+
+        # Minimum width: all action buttons collapse to icon-only with tooltips
+        self.window._apply_responsive_button_labels(820)
+        self.assertEqual(self.window.undo_btn.text(), "")
+        self.assertEqual(self.window.delete_duplicates_btn.text(), "")
+        self.assertEqual(self.window.delete_btn.text(), "")
+        self.assertEqual(self.window.copy_btn.text(), "")
+        self.assertEqual(self.window.save_btn.text(), "")
+        self.assertTrue(bool(self.window.delete_btn.toolTip()))
+
+        # Expanding back restores full labels
+        self.window._apply_responsive_button_labels(1100)
+        self.assertEqual(self.window.undo_btn.text(), " Undo")
+        self.assertEqual(self.window.copy_btn.text(), " Copy Result")
+
 
 if __name__ == "__main__":
     unittest.main()
